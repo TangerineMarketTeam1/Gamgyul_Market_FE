@@ -472,6 +472,11 @@ function handleIncomingMessage(message) {
             return;
         }
 
+        // 발신자인 경우 메시지 처리하지 않음
+        if (message.sender.id === currentUser.id) {
+            return;
+        }
+
         // 중복 메시지 체크
         const existingMessage = document.querySelector(`[data-message-id="${message.id}"]`);
         if (existingMessage) {
@@ -489,9 +494,8 @@ function handleIncomingMessage(message) {
             is_read: message.is_read
         });
 
-        // 상대방 메시지인 경우 읽음 상태 업데이트
-        if (message.sender.id !== currentUser.id && 
-            document.visibilityState === 'visible') {
+        // 읽음 상태 업데이트
+        if (document.visibilityState === 'visible') {
             socket.send(JSON.stringify({
                 type: 'read_receipt',
                 message_id: message.id,
@@ -637,14 +641,6 @@ async function sendMessage(content = null, file = null) {
         const messageData = await response.json();
         console.log('Message sent successfully:', messageData);
 
-        // 서버 형식에 맞춰 WebSocket 메시지 전송
-        socket.send(JSON.stringify({
-            status: 'send',
-            message: messageData,
-            room_id: currentRoomId
-        }));
-
-        // UI에 메시지 추가
         addMessage({
             id: messageData.id,
             content: messageData.content,
