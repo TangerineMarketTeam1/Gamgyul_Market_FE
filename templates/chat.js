@@ -237,15 +237,24 @@ async function displayChatRooms(chatRooms) {
                              onerror="this.src='${DEFAULT_PROFILE_IMAGE}'; this.onerror=null;">
                     </div>
                     <div class="flex-grow-1 ms-3">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <h6 class="mb-0">${username}</h6>
-                            ${room.lastMessage ? `
-                                <small class="text-muted">
-                                    ${formatDate(room.lastMessage.sent_at).split(' ')[1]}
-                                </small>
-                            ` : ''}
+                        <div class="d-flex flex-column">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <h6 class="mb-0">${username}</h6>
+                                ${room.lastMessage ? `
+                                    <small class="text-muted">
+                                        ${formatDate(room.lastMessage.sent_at).split(' ')[1]}
+                                    </small>
+                                ` : ''}
+                            </div>
+                            <p class="small text-muted mb-0">${truncateText(lastMessagePreview)}</p>
+                            <div class="d-flex justify-content-end mt-1">
+                                <button class="btn btn-danger-soft py-0 px-2 leave-chat-button" 
+                                        style="font-size: 0.75rem; min-height: 22px;"
+                                        onclick="event.stopPropagation(); if(confirm('정말로 이 채팅방을 나가시겠습니까?')) leaveChatRoom('${room.id}');">
+                                    <i class="bi bi-box-arrow-right"></i> 나가기
+                                </button>
+                            </div>
                         </div>
-                        <p class="small text-muted mb-0">${truncateText(lastMessagePreview)}</p>
                     </div>
                 </div>
             </a>
@@ -314,9 +323,6 @@ async function openChatRoom(roomId) {
 
         currentRoomId = roomId;
         messagesContainer.scrollTop = messagesContainer.scrollHeight;
-        
-        // 나가기 버튼
-        addLeaveButton();
         
         console.log('Successfully opened chat room:', roomId);
     } catch (error) {
@@ -829,34 +835,6 @@ function showToast(message) {
     setTimeout(() => {
         toastContainer.remove();
     }, 3000);
-}
-
-// 채팅방 나가기 버튼 UI 추가 함수
-function addLeaveButton() {
-    // 기존 버튼이 있다면 제거
-    const existingButton = document.querySelector('.leave-chat-button');
-    if (existingButton) {
-        existingButton.remove();
-    }
-
-    // 검색 폼 컨테이너 찾기
-    const searchContainer = document.getElementById('message-search-container');
-    if (!searchContainer) return;
-
-    // 나가기 버튼 생성
-    const leaveButton = document.createElement('button');
-    leaveButton.className = 'btn btn-danger-soft btn-sm leave-chat-button ms-2';
-    leaveButton.innerHTML = '<i class="bi bi-box-arrow-right"></i> 나가기';
-    leaveButton.onclick = () => {
-        if (currentRoomId) {
-            if (confirm('정말로 이 채팅방을 나가시겠습니까?')) {
-                leaveChatRoom(currentRoomId);
-            }
-        }
-    };
-
-    // 버튼을 검색 폼 컨테이너의 마지막 자식으로 추가
-    searchContainer.appendChild(leaveButton);
 }
 
 // Search Functions
