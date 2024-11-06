@@ -282,7 +282,7 @@ async function openChatRoom(roomId) {
         chatWindow.style.display = 'block';
 
         // 이전 메시지 로드
-        const response = await fetchWithAuth(`${API_BASE_URL}/chats/chatrooms/${roomId}/messages/`);
+        const response = await fetchWithAuth(`${API_BASE_URL}/chats/chatrooms/${roomId}/messages/?ordering=sent_at`);
         if (!response || !response.ok) {
             throw new Error('Failed to fetch messages');
         }
@@ -291,7 +291,11 @@ async function openChatRoom(roomId) {
         console.log('Loaded messages:', data);
 
         const messages = Array.isArray(data) ? data : (data.results || []);
-        messages.forEach(message => {
+        const sortedMessages = messages.sort((a, b) => {
+            return new Date(a.sent_at) - new Date(b.sent_at);
+        });
+
+        sortedMessages.forEach(message => {
             addMessage({
                 id: message.id,
                 content: message.content,
@@ -494,6 +498,13 @@ function handleIncomingMessage(message) {
             is_read: message.is_read
         });
 
+        // 채팅방 목록의 마지막 메시지 업데이트
+        updateChatRoomLastMessage(currentRoomId, {
+            content: message.content,
+            image: message.image,
+            sent_at: message.sent_at
+        });
+
         // 읽음 상태 업데이트
         if (document.visibilityState === 'visible') {
             socket.send(JSON.stringify({
@@ -504,6 +515,27 @@ function handleIncomingMessage(message) {
         }
     } catch (error) {
         console.error('Error handling incoming message:', error);
+    }
+}
+
+// 채팅방 목록의 마지막 메시지 업데이트 함수
+function updateChatRoomLastMessage(roomId, message) {
+    const chatRoomElement = document.querySelector(`#chat-${roomId}-tab`);
+    if (!chatRoomElement) return;
+
+    // 시간 업데이트
+    const timeElement = chatRoomElement.querySelector('small.text-muted');
+    if (timeElement) {
+        timeElement.textContent = formatDate(message.sent_at).split(' ')[1];
+    }
+
+    // 메시지 미리보기 업데이트
+    const previewElement = chatRoomElement.querySelector('p.small.text-muted');
+    if (previewElement) {
+        const messagePreview = message.image ? 
+            (message.content ? `📷 ${message.content}` : '📷 이미지') : 
+            message.content;
+        previewElement.textContent = truncateText(messagePreview);
     }
 }
 
@@ -641,6 +673,7 @@ async function sendMessage(content = null, file = null) {
         const messageData = await response.json();
         console.log('Message sent successfully:', messageData);
 
+        // UI에 메시지 추가
         addMessage({
             id: messageData.id,
             content: messageData.content,
@@ -648,6 +681,13 @@ async function sendMessage(content = null, file = null) {
             image: messageData.image,
             sent_at: messageData.sent_at,
             is_read: messageData.is_read
+        });
+
+        // 채팅방 목록의 마지막 메시지 업데이트
+        updateChatRoomLastMessage(currentRoomId, {
+            content: messageData.content,
+            image: messageData.image,
+            sent_at: messageData.sent_at
         });
 
         // 입력 필드 초기화
@@ -1119,9 +1159,8 @@ document.addEventListener('DOMContentLoaded', function() {
 // Update initialization function
 async function initChat() {
     console.log('initChat called');
-    console.trace('initChat call stack');  // 호출 스택 출력
+    console.trace('initChat call stack');
 
-    // 이미 초기화 중인지 확인
     if (window.initializingChat) {
         console.log('Chat initialization already in progress');
         return;
@@ -1130,14 +1169,12 @@ async function initChat() {
     window.initializingChat = true;
 
     try {
-        // JWT 토큰 확인
         const token = getToken();
         if (!token) {
             window.location.href = '/templates/login.html';
             return;
         }
 
-        // 현재 사용자 정보 가져오기
         const userResponse = await fetchWithAuth(`${API_BASE_URL}/accounts/current-user/`);
         if (!userResponse) return;
 
@@ -1145,14 +1182,29 @@ async function initChat() {
         if (userData) {
             currentUserId = userData.id;
             
-            // 채팅방 목록 가져오기 (한 번만 호출)
+            // 채팅방 목록을 가져옴
             await getChatRooms();
             
-            // 새로 생성된 채팅방이 있는지 확인하고 열기
+            // lastCreatedChatRoomId 확인
             const lastCreatedChatRoomId = localStorage.getItem('lastCreatedChatRoomId');
+            
+            // 현재 활성화된 채팅방 확인
+            const activeRoom = document.querySelector('#chat-list .nav-link.active');
+            const activeRoomId = activeRoom ? activeRoom.getAttribute('href').replace('#chat-', '') : null;
+            
+            // lastCreatedChatRoomId가 있거나 활성화된 채팅방이 있으면 해당 채팅방 열기
             if (lastCreatedChatRoomId) {
                 await openChatRoom(lastCreatedChatRoomId);
                 localStorage.removeItem('lastCreatedChatRoomId');
+            } else if (activeRoomId) {
+                await openChatRoom(activeRoomId);
+            } else {
+                // 첫 번째 채팅방 열기
+                const firstRoom = document.querySelector('#chat-list .nav-link');
+                if (firstRoom) {
+                    const firstRoomId = firstRoom.getAttribute('href').replace('#chat-', '');
+                    await openChatRoom(firstRoomId);
+                }
             }
         } else {
             throw new Error('Failed to initialize user data');
@@ -1160,6 +1212,8 @@ async function initChat() {
     } catch (error) {
         console.error('Error initializing chat:', error);
         showErrorMessage('채팅 초기화에 실패했습니다.');
+    } finally {
+        window.initializingChat = false;
     }
 }
 
